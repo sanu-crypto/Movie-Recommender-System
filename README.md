@@ -5,9 +5,7 @@ A Machine Learning based Movie Recommendation Web App built using **Streamlit**,
 ---
 
 ## 🚀 Live Demo
-🌐 movie-recommender-system-ow3ppt63gxtwmvalczt3gw.streamlit.app
-
----
+🌐 https://movie-recommender-system-ow3ppt63gxtwmvalczt3gw.streamlit.app
 
 ## 📌 Features
 
