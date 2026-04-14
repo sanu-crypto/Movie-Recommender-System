@@ -60,13 +60,19 @@ def fetch_movie_details(movie_name):
 # ==============================
 # 📂 LOAD DATA
 # ==============================
+import os
+
 @st.cache_data
 def load_data():
-    movies_dict = pickle.load(open('movies_intern.pkl','rb'))
-    similarity = pickle.load(open('similarity_intern.pkl','rb'))
-    return pd.DataFrame(movies_dict), similarity
+    base_path = os.path.dirname(__file__)
 
-movies, similarity = load_data()
+    movies_path = os.path.join(base_path, "movies_intern.pkl")
+    similarity_path = os.path.join(base_path, "similarity_intern.pkl")
+
+    movies_dict = pickle.load(open(movies_path, 'rb'))
+    similarity = pickle.load(open(similarity_path, 'rb'))
+
+    return pd.DataFrame(movies_dict), similarity
 
 # ==============================
 # 🤖 RECOMMEND
