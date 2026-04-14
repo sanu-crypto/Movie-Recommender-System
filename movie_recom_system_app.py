@@ -1,68 +1,80 @@
-# ==============================
-# ✅ IMPORTS
-# ==============================
+import os
 import random
 import streamlit as st
 import pandas as pd
 import pickle
 import requests
-st.write("APP UPDATED SUCCESSFULLY")
-
-st.set_page_config(layout="wide")
 
 # ==============================
-# 🔑 API KEY
+# PAGE CONFIG
 # ==============================
-API_KEY = "b7d3955b180a1d71a2dd6949cd41140a"
+st.set_page_config(layout="wide", page_title="Movie Recommender")
 
 # ==============================
-# 🎬 FETCH MOVIE DETAILS
+# API KEY
+# ==============================
+# For Streamlit Cloud, put this in Secrets:
+# API_KEY = "your_tmdb_api_key"
+API_KEY = st.secrets["API_KEY"]
+
+# ==============================
+# FETCH MOVIE DETAILS
 # ==============================
 def fetch_movie_details(movie_name):
     try:
         search_url = f"https://api.themoviedb.org/3/search/movie?api_key={API_KEY}&query={movie_name}"
-        data = requests.get(search_url).json()
+        response = requests.get(search_url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
 
-        if data['results']:
-            movie = data['results'][0]
-            movie_id = movie['id']
+        if data.get("results"):
+            movie = data["results"][0]
+            movie_id = movie["id"]
 
-            poster = "https://image.tmdb.org/t/p/w500/" + movie['poster_path'] if movie.get('poster_path') else None
-            backdrop = "https://image.tmdb.org/t/p/original/" + movie['backdrop_path'] if movie.get('backdrop_path') else None
-            rating = movie.get('vote_average', "N/A")
-            overview = movie.get('overview', "No description")
+            poster = (
+                "https://image.tmdb.org/t/p/w500/" + movie["poster_path"]
+                if movie.get("poster_path")
+                else None
+            )
+            backdrop = (
+                "https://image.tmdb.org/t/p/original/" + movie["backdrop_path"]
+                if movie.get("backdrop_path")
+                else None
+            )
+            rating = movie.get("vote_average", "N/A")
+            overview = movie.get("overview", "No description available")
 
-            # trailer
             trailer = None
             video_url = f"https://api.themoviedb.org/3/movie/{movie_id}/videos?api_key={API_KEY}"
-            video_data = requests.get(video_url).json()
+            video_response = requests.get(video_url, timeout=10)
+            video_response.raise_for_status()
+            video_data = video_response.json()
 
             for vid in video_data.get("results", []):
-                if vid["type"] == "Trailer":
+                if vid.get("type") == "Trailer" and vid.get("site") == "YouTube":
                     trailer = f"https://www.youtube.com/watch?v={vid['key']}"
                     break
 
-            # reviews
             review_text = "No reviews available"
             review_url = f"https://api.themoviedb.org/3/movie/{movie_id}/reviews?api_key={API_KEY}"
-            review_data = requests.get(review_url).json()
+            review_response = requests.get(review_url, timeout=10)
+            review_response.raise_for_status()
+            review_data = review_response.json()
 
             if review_data.get("results"):
                 review_text = review_data["results"][0]["content"][:150] + "..."
 
             return poster, backdrop, rating, overview, trailer, review_text
 
-    except:
+    except Exception:
         pass
 
-    return None, None, "N/A", "No data", None, "No reviews"
+    return None, None, "N/A", "No data available", None, "No reviews available"
 
 
 # ==============================
-# 📂 LOAD DATA
+# LOAD DATA
 # ==============================
-import os
-
 @st.cache_data
 def load_data():
     base_path = os.path.dirname(__file__)
@@ -70,23 +82,36 @@ def load_data():
     movies_path = os.path.join(base_path, "movies_intern.pkl")
     similarity_path = os.path.join(base_path, "similarity_intern.pkl")
 
-    movies_dict = pickle.load(open(movies_path, 'rb'))
-    similarity = pickle.load(open(similarity_path, 'rb'))
+    with open(movies_path, "rb") as f:
+        movies_dict = pickle.load(f)
+
+    with open(similarity_path, "rb") as f:
+        similarity = pickle.load(f)
 
     return pd.DataFrame(movies_dict), similarity
 
+
+movies, similarity = load_data()
+
+# Debug text
+st.write("APP UPDATED SUCCESSFULLY")
+
 # ==============================
-# 🤖 RECOMMEND
+# RECOMMEND FUNCTION
 # ==============================
 def recommend(movie):
-    index = movies[movies['title'] == movie].index[0]
+    index = movies[movies["title"] == movie].index[0]
     distances = similarity[index]
 
-    movie_list = sorted(list(enumerate(distances)), reverse=True, key=lambda x: x[1])[1:6]
+    movie_list = sorted(
+        list(enumerate(distances)),
+        reverse=True,
+        key=lambda x: x[1]
+    )[1:6]
 
     results = []
-    for i in movie_list:
-        title = movies.iloc[i[0]]['title']
+    for item in movie_list:
+        title = movies.iloc[item[0]]["title"]
         details = fetch_movie_details(title)
         results.append((title, *details))
 
@@ -94,60 +119,86 @@ def recommend(movie):
 
 
 # ==============================
-# 🎨 UI CSS
+# RANDOM MOVIE FOR HERO
+# ==============================
+random_movie = movies.sample(1)["title"].values[0]
+poster, backdrop, rating, overview, trailer, review = fetch_movie_details(random_movie)
+
+# ==============================
+# UI CSS
 # ==============================
 st.markdown("""
 <style>
 body { background-color: black; }
 
-/* Hero */
 .hero {
     position: relative;
     height: 420px;
+    border-radius: 18px;
+    overflow: hidden;
+    margin-bottom: 20px;
 }
 
-/* overlay */
 .overlay {
-    position:absolute;
-    width:100%;
-    height:100%;
-    background:linear-gradient(to right, black 40%, transparent);
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to right, rgba(0,0,0,0.90) 0%, rgba(0,0,0,0.72) 38%, rgba(0,0,0,0.20) 100%);
+    z-index: 1;
 }
 
-/* faded title */
 .faded {
-    position:absolute;
-    top:20px;
-    left:40px;
-    font-size:80px;
-    color:rgba(255,255,255,0.15);
-    font-weight:900;
+    position: absolute;
+    top: 20px;
+    left: 40px;
+    font-size: 78px;
+    color: rgba(255,255,255,0.18);
+    font-weight: 900;
+    line-height: 0.95;
+    letter-spacing: 3px;
+    z-index: 2;
 }
 
-/* card */
-.card {
-    background:#111;
-    padding:10px;
-    border-radius:10px;
-    transition:0.3s;
+.hero-content {
+    position: relative;
+    z-index: 3;
+    padding: 135px 40px 40px 40px;
+    max-width: 560px;
 }
+
+.hero-movie-title {
+    color: white;
+    font-size: 42px;
+    font-weight: 800;
+    margin-bottom: 12px;
+}
+
+.hero-overview {
+    color: #dddddd;
+    font-size: 17px;
+    line-height: 1.6;
+}
+
+.card {
+    background: #111;
+    padding: 10px;
+    border-radius: 12px;
+    transition: 0.3s;
+}
+
 .card:hover {
-    transform:scale(1.08);
+    transform: scale(1.05);
 }
 </style>
 """, unsafe_allow_html=True)
 
-
 # ==============================
-# 🎥 HERO
+# HERO SECTION
 # ==============================
-poster, backdrop, rating, overview, trailer, review = fetch_movie_details(random_movie)
-
 if backdrop:
     st.markdown(f"""
     <div class="hero" style="background-image:url('{backdrop}'); background-size:cover; background-position:center;">
         <div class="overlay"></div>
-        <div class="faded">🎬MOVIE<br>mATE</div>
+        <div class="faded">MOVIE<br>RECOMMENDER</div>
         <div class="hero-content">
             <div class="hero-movie-title">{random_movie}</div>
             <p class="hero-overview">{overview[:200]}...</p>
@@ -155,23 +206,19 @@ if backdrop:
     </div>
     """, unsafe_allow_html=True)
 
-# 🎬 Auto trailer
 if trailer:
     st.video(trailer)
 
+# ==============================
+# SEARCH
+# ==============================
+selected_movie = st.selectbox("Search Movie", movies["title"].values)
 
 # ==============================
-# 🔍 SEARCH
-# ==============================
-selected_movie = st.selectbox("Search Movie", movies['title'].values)
-
-# ==============================
-# 🚀 BUTTON
+# RECOMMEND BUTTON
 # ==============================
 if st.button("🔥 Recommend"):
-
     results = recommend(selected_movie)
-
     cols = st.columns(5)
 
     for i, (title, poster, backdrop, rating, overview, trailer, review) in enumerate(results):
@@ -179,35 +226,36 @@ if st.button("🔥 Recommend"):
             st.markdown('<div class="card">', unsafe_allow_html=True)
 
             if poster:
-                st.image(poster)
+                st.image(poster, use_container_width=True)
 
             st.write(title)
             st.write(f"⭐ {rating}")
 
             if trailer:
-                st.video(trailer)
+                st.link_button("▶ Trailer", trailer)
 
             st.caption("📝 " + review)
-
             st.markdown('</div>', unsafe_allow_html=True)
-# 🎲 Random movie button
-if st.button("🎲 Surprise Me"):
-    random_movie = movies.sample(1)['title'].values[0]
-    st.success(f"Try watching: {random_movie}")
 
 # ==============================
-# 🔥 TRENDING
+# SURPRISE BUTTON
+# ==============================
+if st.button("🎲 Surprise Me"):
+    surprise_movie = movies.sample(1)["title"].values[0]
+    st.success(f"Try watching: {surprise_movie}")
+
+# ==============================
+# TRENDING
 # ==============================
 st.subheader("🔥 Trending")
 
-sample_movies = random.sample(list(movies['title'].values), 5)
+sample_movies = random.sample(list(movies["title"].values), 5)
 cols = st.columns(5)
 
 for i, movie in enumerate(sample_movies):
     poster, _, rating, _, _, _ = fetch_movie_details(movie)
     with cols[i]:
         if poster:
-            st.image(poster)
+            st.image(poster, use_container_width=True)
         st.write(movie)
         st.write(f"⭐ {rating}")
-# redeploy trigger
