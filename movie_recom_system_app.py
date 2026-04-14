@@ -6,7 +6,7 @@ import streamlit as st
 import pandas as pd
 import pickle
 import requests
-
+st.write("APP UPDATED SUCCESSFULLY")
 
 st.set_page_config(layout="wide")
 
