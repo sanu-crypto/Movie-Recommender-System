@@ -141,7 +141,6 @@ body { background-color: black; }
 # ==============================
 # 🎥 HERO
 # ==============================
-random_movie = movies.sample(1)['title'].values[0]
 poster, backdrop, rating, overview, trailer, review = fetch_movie_details(random_movie)
 
 if backdrop:
@@ -191,7 +190,10 @@ if st.button("🔥 Recommend"):
             st.caption("📝 " + review)
 
             st.markdown('</div>', unsafe_allow_html=True)
-
+# 🎲 Random movie button
+if st.button("🎲 Surprise Me"):
+    random_movie = movies.sample(1)['title'].values[0]
+    st.success(f"Try watching: {random_movie}")
 
 # ==============================
 # 🔥 TRENDING
