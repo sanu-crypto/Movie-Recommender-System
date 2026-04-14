@@ -208,3 +208,4 @@ for i, movie in enumerate(sample_movies):
             st.image(poster)
         st.write(movie)
         st.write(f"⭐ {rating}")
+# redeploy trigger
