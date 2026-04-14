@@ -141,7 +141,7 @@ body { background-color: black; }
 # ==============================
 # 🎥 HERO
 # ==============================
-random_movie = random.choice(movies['title'].values)
+random_movie = movies.sample(1)['title'].values[0]
 poster, backdrop, rating, overview, trailer, review = fetch_movie_details(random_movie)
 
 if backdrop:
