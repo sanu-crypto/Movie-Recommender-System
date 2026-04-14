@@ -1,25 +1,17 @@
 import os
 import random
-import streamlit as st
-import pandas as pd
 import pickle
 import requests
+import streamlit as st
+import pandas as pd
 
-# ==============================
-# PAGE CONFIG
-# ==============================
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
 st.set_page_config(layout="wide", page_title="Movie Recommender")
 
-# ==============================
-# API KEY
-# ==============================
-# For Streamlit Cloud, put this in Secrets:
-# API_KEY = "your_tmdb_api_key"
 API_KEY = st.secrets["API_KEY"]
 
-# ==============================
-# FETCH MOVIE DETAILS
-# ==============================
 def fetch_movie_details(movie_name):
     try:
         search_url = f"https://api.themoviedb.org/3/search/movie?api_key={API_KEY}&query={movie_name}"
@@ -72,61 +64,67 @@ def fetch_movie_details(movie_name):
     return None, None, "N/A", "No data available", None, "No reviews available"
 
 
-# ==============================
-# LOAD DATA
-# ==============================
 @st.cache_data
-def load_data():
+def load_movies():
     base_path = os.path.dirname(__file__)
-
     movies_path = os.path.join(base_path, "movies_intern.pkl")
-    similarity_path = os.path.join(base_path, "similarity_intern.pkl")
 
     with open(movies_path, "rb") as f:
         movies_dict = pickle.load(f)
 
-    with open(similarity_path, "rb") as f:
-        similarity = pickle.load(f)
+    movies = pd.DataFrame(movies_dict)
 
-    return pd.DataFrame(movies_dict), similarity
+    # Make sure needed columns exist
+    if "title" not in movies.columns:
+        raise ValueError("movies_intern.pkl must contain a 'title' column.")
+
+    # Use description if available, otherwise blank
+    if "description" not in movies.columns:
+        movies["description"] = ""
+    movies["description"] = movies["description"].fillna("").astype(str)
+
+    return movies
 
 
-movies, similarity = load_data()
+@st.cache_resource
+def build_similarity(movies_df):
+    vectorizer = TfidfVectorizer(stop_words="english")
+    tfidf_matrix = vectorizer.fit_transform(movies_df["description"])
+    similarity = cosine_similarity(tfidf_matrix)
+    return similarity
 
-# Debug text
+
+movies = load_movies()
+similarity = build_similarity(movies)
+
 st.write("APP UPDATED SUCCESSFULLY")
 
-# ==============================
-# RECOMMEND FUNCTION
-# ==============================
 def recommend(movie):
-    index = movies[movies["title"] == movie].index[0]
+    movie_index_list = movies[movies["title"] == movie].index.tolist()
+    if not movie_index_list:
+        return []
+
+    index = movie_index_list[0]
     distances = similarity[index]
 
     movie_list = sorted(
         list(enumerate(distances)),
-        reverse=True,
-        key=lambda x: x[1]
+        key=lambda x: x[1],
+        reverse=True
     )[1:6]
 
     results = []
-    for item in movie_list:
-        title = movies.iloc[item[0]]["title"]
+    for i, _score in movie_list:
+        title = movies.iloc[i]["title"]
         details = fetch_movie_details(title)
         results.append((title, *details))
 
     return results
 
 
-# ==============================
-# RANDOM MOVIE FOR HERO
-# ==============================
 random_movie = movies.sample(1)["title"].values[0]
 poster, backdrop, rating, overview, trailer, review = fetch_movie_details(random_movie)
 
-# ==============================
-# UI CSS
-# ==============================
 st.markdown("""
 <style>
 body { background-color: black; }
@@ -191,9 +189,6 @@ body { background-color: black; }
 </style>
 """, unsafe_allow_html=True)
 
-# ==============================
-# HERO SECTION
-# ==============================
 if backdrop:
     st.markdown(f"""
     <div class="hero" style="background-image:url('{backdrop}'); background-size:cover; background-position:center;">
@@ -209,20 +204,14 @@ if backdrop:
 if trailer:
     st.video(trailer)
 
-# ==============================
-# SEARCH
-# ==============================
 selected_movie = st.selectbox("Search Movie", movies["title"].values)
 
-# ==============================
-# RECOMMEND BUTTON
-# ==============================
 if st.button("🔥 Recommend"):
     results = recommend(selected_movie)
     cols = st.columns(5)
 
-    for i, (title, poster, backdrop, rating, overview, trailer, review) in enumerate(results):
-        with cols[i]:
+    for idx, (title, poster, backdrop, rating, overview, trailer, review) in enumerate(results):
+        with cols[idx]:
             st.markdown('<div class="card">', unsafe_allow_html=True)
 
             if poster:
@@ -235,22 +224,17 @@ if st.button("🔥 Recommend"):
                 st.link_button("▶ Trailer", trailer)
 
             st.caption("📝 " + review)
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
-# ==============================
-# SURPRISE BUTTON
-# ==============================
 if st.button("🎲 Surprise Me"):
     surprise_movie = movies.sample(1)["title"].values[0]
     st.success(f"Try watching: {surprise_movie}")
 
-# ==============================
-# TRENDING
-# ==============================
 st.subheader("🔥 Trending")
 
-sample_movies = random.sample(list(movies["title"].values), 5)
-cols = st.columns(5)
+sample_count = min(5, len(movies))
+sample_movies = random.sample(list(movies["title"].values), sample_count)
+cols = st.columns(sample_count)
 
 for i, movie in enumerate(sample_movies):
     poster, _, rating, _, _, _ = fetch_movie_details(movie)
