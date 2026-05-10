@@ -37,6 +37,3 @@ A Machine Learning based Movie Recommendation Web App built using **Streamlit**,
 - TMDB API
 - Requests
 
----
-
-## 📂 Project Structure
